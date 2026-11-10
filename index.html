@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ماشین‌حساب سود</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --text: #1d2330;
+    --muted: #667085;
+    --border: #d9dde5;
+    --accent: #1f6feb;
+    --accent-soft: #e8f0fe;
+    --good: #12805c;
+    --bad: #d92d20;
+    color-scheme: light;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12151c;
+      --card: #1b2029;
+      --text: #e8ebf2;
+      --muted: #9aa4b5;
+      --border: #2d3442;
+      --accent: #5b9bff;
+      --accent-soft: #1d2a44;
+      --good: #4cc9a0;
+      --bad: #ff7b72;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12151c;
+    --card: #1b2029;
+    --text: #e8ebf2;
+    --muted: #9aa4b5;
+    --border: #2d3442;
+    --accent: #5b9bff;
+    --accent-soft: #1d2a44;
+    --good: #4cc9a0;
+    --bad: #ff7b72;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: Tahoma, "Vazirmatn", "Segoe UI", system-ui, sans-serif;
+    line-height: 1.7;
+    padding: 16px;
+  }
+  .wrap { max-width: 480px; margin: 0 auto; }
+  h1 {
+    font-size: 22px;
+    font-weight: bold;
+    text-align: center;
+    margin: 8px 0 18px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+  label { display: block; font-size: 17px; font-weight: bold; color: var(--text); margin-bottom: 8px; }
+  input {
+    width: 100%;
+    font: inherit;
+    font-size: 15px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg);
+    color: var(--text);
+    direction: ltr;
+    text-align: right;
+  }
+  input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  .field { margin-bottom: 14px; }
+  .field:last-of-type { margin-bottom: 0; }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .result {
+    border-radius: 12px;
+    background: var(--accent-soft);
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .result:last-of-type { margin-bottom: 0; }
+  .result h2 { font-size: 15px; margin: 0 0 4px; color: var(--accent); }
+  .price { font-size: 24px; font-weight: bold; direction: ltr; text-align: right; }
+  .detail { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .detail b { color: var(--good); direction: ltr; unicode-bidi: embed; }
+  .loss b, .loss .price { color: var(--bad); }
+  .card-title { font-size: 16px; margin: 0 0 10px; }
+  .formula { font-size: 14px; padding: 8px 10px; border-radius: 8px; background: var(--accent-soft); margin-bottom: 8px; }
+  .formula span { color: var(--accent); font-weight: bold; }
+  .explain { font-size: 13px; color: var(--muted); margin-top: 12px; line-height: 1.9; }
+  .explain b { color: var(--text); }
+  .err { color: var(--bad); font-size: 14px; min-height: 20px; margin-top: 8px; }
+  .note { font-size: 12px; color: var(--muted); margin-top: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>ماشین‌حساب سود</h1>
+
+  <div class="card">
+    <div class="field">
+      <label for="cost">قیمت خرید (تومان)</label>
+      <input id="cost" type="text" inputmode="decimal" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="pct">درصد سود</label>
+      <input id="pct" type="text" inputmode="decimal" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="sale">قیمت فروش (تومان)</label>
+      <input id="sale" type="text" inputmode="decimal" autocomplete="off">
+    </div>
+    <div class="hint">قیمت خرید + درصد سود ← قیمت فروش را حساب می‌کند.<br>قیمت خرید + قیمت فروش ← سود را حساب می‌کند.<br>قیمت فروش + درصد سود ← قیمت خرید را حساب می‌کند.</div>
+    <div class="err" id="err"></div>
+  </div>
+
+  <!-- حالت اول: از درصد سود، قیمت فروش -->
+  <div class="card" id="out-price" hidden>
+    <div class="result">
+      <h2>مارک‌آپ (سود روی قیمت خرید)</h2>
+      <div class="price" id="mk-price"></div>
+      <div class="detail">مبلغ سود: <b id="mk-profit"></b></div>
+      <div class="detail">سود واقعی: <b id="mk-real"></b></div>
+    </div>
+    <div class="result">
+      <h2>مارجین (سود روی قیمت فروش)</h2>
+      <div class="price" id="mg-price"></div>
+      <div class="detail">مبلغ سود: <b id="mg-profit"></b></div>
+      <div class="detail">سود واقعی: <b id="mg-real"></b></div>
+    </div>
+  </div>
+
+  <!-- حالت دوم: از قیمت فروش، سود -->
+  <div class="card" id="out-profit" hidden>
+    <div class="result" id="pf-box">
+      <h2 id="pf-title">مبلغ سود</h2>
+      <div class="price" id="pf-amount"></div>
+      <div class="detail">درصد سود روی قیمت خرید (مارک‌آپ): <b id="pf-mk"></b></div>
+      <div class="detail">درصد سود روی قیمت فروش (مارجین): <b id="pf-mg"></b></div>
+    </div>
+  </div>
+  <!-- حالت سوم: از قیمت فروش و درصد سود، قیمت خرید -->
+  <div class="card" id="out-cost" hidden>
+    <div class="result">
+      <h2>قیمت خرید با مارک‌آپ</h2>
+      <div class="price" id="ck-cost"></div>
+      <div class="detail">مبلغ سود: <b id="ck-profit"></b></div>
+    </div>
+    <div class="result">
+      <h2>قیمت خرید با مارجین</h2>
+      <div class="price" id="cg-cost"></div>
+      <div class="detail">مبلغ سود: <b id="cg-profit"></b></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2 class="card-title">فرمول‌ها</h2>
+    <div class="formula"><span>مارک‌آپ:</span> قیمت فروش = قیمت خرید × (درصد/۱۰۰ + ۱)</div>
+    <div class="formula"><span>مارجین:</span> قیمت فروش = قیمت خرید ÷ (درصد/۱۰۰ − ۱)</div>
+    <div class="explain">
+      <b>تفاوت مارک‌آپ و مارجین:</b>
+      مارک‌آپ درصد سود را نسبت به <b>قیمت خرید</b> حساب می‌کند، ولی مارجین نسبت به <b>قیمت فروش</b>.
+      برای همین با یک درصد یکسان، قیمت فروش مارجین همیشه بیشتر از مارک‌آپ است.
+    </div>
+  </div>
+</div>
+
+<script>
+  // تبدیل ارقام فارسی و عربی به انگلیسی
+  function toEnDigits(s) {
+    const fa = '۰۱۲۳۴۵۶۷۸۹', ar = '٠١٢٣٤٥٦٧٨٩';
+    return s.replace(/[۰-۹]/g, d => fa.indexOf(d))
+            .replace(/[٠-٩]/g, d => ar.indexOf(d))
+            .replace(/[٫]/g, '.');
+  }
+  function parseNum(s) {
+    if (!s) return NaN;
+    s = toEnDigits(s).replace(/[,،٬\s]/g, '');
+    return s === '' ? NaN : Number(s);
+  }
+  function fmt(n) {
+    const rounded = Math.round(n * 100) / 100;
+    return rounded.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  }
+
+  // جداکننده سه‌رقمی هنگام تایپ، با حفظ جای مکان‌نما
+  function groupInput(el) {
+    const raw = el.value;
+    const caret = el.selectionStart == null ? raw.length : el.selectionStart;
+    const isSig = ch => /[0-9۰-۹٠-٩.٫]/.test(ch);
+    let sigBefore = 0;
+    for (let i = 0; i < caret; i++) if (isSig(raw[i])) sigBefore++;
+
+    let clean = toEnDigits(raw).replace(/[^0-9.]/g, '');
+    const firstDot = clean.indexOf('.');
+    let intPart = firstDot === -1 ? clean : clean.slice(0, firstDot);
+    let decPart = firstDot === -1 ? null : clean.slice(firstDot + 1).replace(/\./g, '');
+    intPart = intPart.replace(/^0+(?=\d)/, '');
+    const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    const out = decPart === null ? grouped : grouped + '.' + decPart;
+
+    el.value = out;
+
+    let pos = 0, seen = 0;
+    while (pos < out.length && seen < sigBefore) {
+      if (out[pos] !== ',') seen++;
+      pos++;
+    }
+    try { el.setSelectionRange(pos, pos); } catch (e) {}
+  }
+
+  const costEl = document.getElementById('cost');
+  const pctEl = document.getElementById('pct');
+  const saleEl = document.getElementById('sale');
+  const errEl = document.getElementById('err');
+  const outPrice = document.getElementById('out-price');
+  const outProfit = document.getElementById('out-profit');
+
+  // آخرین فیلدی که کاربر تایپ کرده: 'pct' یا 'sale'
+  let mode = 'pct';
+  const outCost = document.getElementById('out-cost');
+
+  function setText(id, t) { document.getElementById(id).textContent = t; }
+  // تومان و عدد هر کدام به‌صورت جدا چیده می‌شوند تا ترتیب همیشه ثابت بماند
+  function setMoney(id, n) {
+    document.getElementById(id).innerHTML = '<bdi>تومان</bdi> <bdi>' + fmt(n) + '</bdi>';
+  }
+
+  function readField(el, name) {
+    const v = parseNum(el.value);
+    if (isNaN(v)) { errEl.textContent = 'لطفاً فقط عدد وارد کنید.'; return null; }
+    if (name && v < 0) { errEl.textContent = name + ' نمی‌تواند منفی باشد.'; return null; }
+    return v;
+  }
+
+  function showProfit(cost, sale) {
+    const profit = sale - cost;
+    const box = document.getElementById('pf-box');
+    box.classList.toggle('loss', profit < 0);
+    setText('pf-title', profit < 0 ? 'مبلغ ضرر' : 'مبلغ سود');
+    setMoney('pf-amount', Math.abs(profit));
+    const sign = profit < 0 ? '−' : '';
+    setText('pf-mk', cost === 0 ? '—' : sign + fmt(Math.abs(profit / cost) * 100) + '٪');
+    setText('pf-mg', sale === 0 ? '—' : sign + fmt(Math.abs(profit / sale) * 100) + '٪');
+    outProfit.hidden = false;
+  }
+
+  function showPrice(cost, pct) {
+    const p = pct / 100;
+    const mkPrice = cost * (1 + p);
+    const mkProfit = mkPrice - cost;
+    const mkReal = mkPrice === 0 ? 0 : (mkProfit / mkPrice) * 100;
+    setMoney('mk-price', mkPrice);
+    setMoney('mk-profit', mkProfit);
+    setText('mk-real', fmt(mkReal) + '٪');
+
+    if (p >= 1) {
+      setText('mg-price', '—');
+      setText('mg-profit', '—');
+      setText('mg-real', '—');
+      errEl.textContent = 'مارجین باید کمتر از ۱۰۰٪ باشد.';
+    } else {
+      const mgPrice = cost / (1 - p);
+      const mgProfit = mgPrice - cost;
+      const mgReal = mgPrice === 0 ? 0 : (mgProfit / mgPrice) * 100;
+      setMoney('mg-price', mgPrice);
+      setMoney('mg-profit', mgProfit);
+      setText('mg-real', fmt(mgReal) + '٪');
+    }
+    outPrice.hidden = false;
+  }
+
+  function showCost(sale, pct) {
+    const p = pct / 100;
+    if (1 + p <= 0) {
+      setText('ck-cost', '—');
+      setText('ck-profit', '—');
+    } else {
+      const c = sale / (1 + p);
+      setMoney('ck-cost', c);
+      setMoney('ck-profit', sale - c);
+    }
+    if (p >= 1) {
+      setText('cg-cost', '—');
+      setText('cg-profit', '—');
+      errEl.textContent = 'مارجین باید کمتر از ۱۰۰٪ باشد.';
+    } else {
+      const c = sale * (1 - p);
+      setMoney('cg-cost', c);
+      setMoney('cg-profit', sale - c);
+    }
+    outCost.hidden = false;
+  }
+
+  function calc() {
+    errEl.textContent = '';
+    outPrice.hidden = true;
+    outProfit.hidden = true;
+    outCost.hidden = true;
+
+    const hasCost = costEl.value.trim() !== '';
+    const hasPct = pctEl.value.trim() !== '';
+    const hasSale = saleEl.value.trim() !== '';
+
+    let action = null;
+    if (hasCost && hasPct && hasSale) action = mode === 'sale' ? 'profit' : 'price';
+    else if (hasCost && hasSale) action = 'profit';
+    else if (hasCost && hasPct) action = 'price';
+    else if (hasSale && hasPct) action = 'cost';
+    if (!action) return;
+
+    if (action === 'profit') {
+      const cost = readField(costEl, 'قیمت خرید'); if (cost === null) return;
+      const sale = readField(saleEl, 'قیمت فروش'); if (sale === null) return;
+      showProfit(cost, sale);
+    } else if (action === 'price') {
+      const cost = readField(costEl, 'قیمت خرید'); if (cost === null) return;
+      const pct = readField(pctEl, null); if (pct === null) return;
+      showPrice(cost, pct);
+    } else {
+      const sale = readField(saleEl, 'قیمت فروش'); if (sale === null) return;
+      const pct = readField(pctEl, null); if (pct === null) return;
+      showCost(sale, pct);
+    }
+  }
+
+  costEl.addEventListener('input', () => { groupInput(costEl); calc(); });
+  saleEl.addEventListener('input', () => { mode = 'sale'; groupInput(saleEl); calc(); });
+  pctEl.addEventListener('input', () => { mode = 'pct'; calc(); });
+</script>
+</body>
+</html>
