@@ -113,6 +113,15 @@
   .seg button + button { border-right: 1px solid var(--border); }
   .seg button.on { background: var(--accent-soft); color: var(--accent); font-weight: bold; }
   .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .round-btn {
+    display: block; width: 100%; margin-bottom: 14px; padding: 12px;
+    font: inherit; font-size: 15px; font-weight: bold; color: var(--accent);
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .round-btn[hidden] { display: none; }
+  .round-btn.on { background: var(--accent-soft); border-color: var(--accent); }
+  .round-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .clear-btn {
     display: block; width: 100%; margin-bottom: 14px; padding: 12px;
     font: inherit; font-size: 15px; font-weight: bold; color: var(--bad);
@@ -234,6 +243,7 @@
       <div class="detail"><span id="dc-l2"></span>: <b id="dc-sale"></b></div>
     </div>
   </div>
+  <button type="button" id="round-btn" class="round-btn" aria-pressed="false" hidden>رند کردن</button>
   <button type="button" id="clear-btn" class="clear-btn">پاک کردن محاسبات</button>
   <div class="card">
     <h2 class="card-title">فرمول‌ها</h2>
@@ -305,13 +315,15 @@
   let discMode = null;
   // انتخاب‌های مارک‌آپ و مارجین (هر دو می‌توانند هم‌زمان فعال باشند)
   let useMk = false, useMg = false;
+  // رند کردن مبالغ (تومان)
+  let roundOn = false;
   const outCost = document.getElementById('out-cost');
   const outDisc = document.getElementById('out-disc');
 
   function setText(id, t) { document.getElementById(id).textContent = t; }
   // تومان و عدد هر کدام به‌صورت جدا چیده می‌شوند تا ترتیب همیشه ثابت بماند
   function setMoney(id, n) {
-    document.getElementById(id).innerHTML = '<bdi>تومان</bdi> <bdi>' + fmt(n) + '</bdi>';
+    document.getElementById(id).innerHTML = '<bdi>تومان</bdi> <bdi>' + fmt(roundOn ? roundNice(n) : n) + '</bdi>';
   }
 
   function readField(el, name) {
@@ -411,7 +423,7 @@
     outCost.hidden = false;
   }
 
-  function calc() {
+  function calcCore() {
     errEl.textContent = '';
     outPrice.hidden = true;
     outProfit.hidden = true;
@@ -477,6 +489,24 @@
     }
   }
 
+  // گرد کردن به نزدیک‌ترین ۱۰۰۰ (برای مبالغ ≥ ۱۰٬۰۰۰)، ۱۰۰ (≥ ۱٬۰۰۰)، ۱۰ (≥ ۱۰۰) یا عدد صحیح
+  function roundNice(n) {
+    const a = Math.abs(n);
+    const step = a >= 10000 ? 1000 : a >= 1000 ? 100 : a >= 100 ? 10 : 1;
+    return Math.sign(n) * Math.round(a / step) * step;
+  }
+  const roundBtn = document.getElementById('round-btn');
+  function calc() {
+    calcCore();
+    // دکمه رند کردن فقط وقتی نتیجه‌ای نمایش داده شده باشد دیده می‌شود
+    roundBtn.hidden = outPrice.hidden && outProfit.hidden && outCost.hidden && outDisc.hidden;
+  }
+  roundBtn.addEventListener('click', () => {
+    roundOn = !roundOn;
+    roundBtn.classList.toggle('on', roundOn);
+    roundBtn.setAttribute('aria-pressed', roundOn);
+    calc();
+  });
   costEl.addEventListener('input', () => { groupInput(costEl); calc(); });
   saleEl.addEventListener('input', () => { mode = 'sale'; groupInput(saleEl); calc(); });
   pctEl.addEventListener('input', () => { mode = 'pct'; calc(); });
@@ -497,6 +527,9 @@
     mode = 'pct';
     discMode = null;
     useMk = useMg = false;
+    roundOn = false;
+    roundBtn.classList.remove('on');
+    roundBtn.setAttribute('aria-pressed', 'false');
     ['dm-before', 'dm-after', 'pm-mk', 'pm-mg'].forEach(id => {
       const b = document.getElementById(id);
       b.classList.remove('on');
