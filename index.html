@@ -105,6 +105,14 @@
   input:focus { outline: 2px solid var(--accent); border-color: transparent; }
   .field { margin-bottom: 14px; }
   .field:last-of-type { margin-bottom: 0; }
+  .seg { display: flex; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--bg); }
+  .seg button {
+    flex: 1; padding: 8px 6px; border: 0; background: transparent; color: var(--muted);
+    font: inherit; font-size: 13px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .seg button + button { border-right: 1px solid var(--border); }
+  .seg button.on { background: var(--accent-soft); color: var(--accent); font-weight: bold; }
+  .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .hint { font-size: 12px; color: var(--muted); margin-top: 24px; }
   .result {
     border-radius: 12px;
@@ -149,9 +157,13 @@
     </div>
     <div class="field">
       <label for="disc">تخفیف (درصد)</label>
+      <div class="seg" role="group" aria-label="نوع قیمت واردشده">
+        <button type="button" id="dm-before" aria-pressed="false">قیمت قبل از تخفیف</button>
+        <button type="button" id="dm-after" aria-pressed="false">قیمت بعد از تخفیف</button>
+      </div>
       <input id="disc" type="text" inputmode="decimal" autocomplete="off">
     </div>
-    <div class="hint">قیمت خرید + درصد سود ← محاسبه قیمت فروش<br>قیمت خرید + قیمت فروش ← محاسبه سود<br>قیمت فروش + درصد سود ← محاسبه قیمت خرید<br>قیمت فروش (پس از تخفیف) + تخفیف ← محاسبه قیمت خرید بدون تخفیف<br>در حالت‌های دیگر، تخفیف (اختیاری) از قیمت فروش کم می‌شود.</div>
+    <div class="hint">قیمت خرید + درصد سود ← محاسبه قیمت فروش<br>قیمت خرید + قیمت فروش ← محاسبه سود<br>قیمت فروش + درصد سود ← محاسبه قیمت خرید<br>قیمت فروش + تخفیف + «قیمت قبل از تخفیف» ← محاسبه قیمت خرید بدون تخفیف<br>قیمت فروش + تخفیف + «قیمت بعد از تخفیف» ← محاسبه مبلغ تخفیف و قیمت نهایی<br>(با دکمه‌های بالای کادر تخفیف، یکی از این دو حالت را انتخاب کنید)<br>در حالت‌های دیگر، تخفیف (اختیاری) از قیمت فروش کم می‌شود.</div>
     <div class="err" id="err"></div>
   </div>
 
@@ -206,10 +218,10 @@
   <!-- حالت چهارم: از قیمت فروش و تخفیف، قیمت خرید -->
   <div class="card" id="out-disc" hidden>
     <div class="result">
-      <h2>قیمت خرید (بدون تخفیف)</h2>
+      <h2 id="dc-title">قیمت نهایی</h2>
       <div class="price" id="dc-cost"></div>
       <div class="detail">مبلغ تخفیف: <b id="dc-amount"></b></div>
-      <div class="detail">قیمت فروش (پس از تخفیف): <b id="dc-sale"></b></div>
+      <div class="detail"><span id="dc-l2"></span>: <b id="dc-sale"></b></div>
     </div>
   </div>
   <div class="card">
@@ -278,6 +290,8 @@
 
   // آخرین فیلدی که کاربر تایپ کرده: 'pct' یا 'sale'
   let mode = 'pct';
+  // حالت «قیمت فروش + تخفیف»: before = محاسبه قیمت قبل از تخفیف، after = محاسبه قیمت بعد از تخفیف، null = انتخاب نشده
+  let discMode = null;
   const outCost = document.getElementById('out-cost');
   const outDisc = document.getElementById('out-disc');
 
@@ -417,11 +431,23 @@
       showPrice(cost, pct, d);
     } else if (action === 'disccost') {
       const sale = readField(saleEl, 'قیمت فروش'); if (sale === null) return;
-      if (d >= 100) { errEl.textContent = 'برای این محاسبه، تخفیف باید کمتر از ۱۰۰٪ باشد.'; return; }
-      const orig = sale / (1 - d / 100);
-      setMoney('dc-cost', orig);
-      setMoney('dc-amount', orig - sale);
-      setMoney('dc-sale', sale);
+      if (!discMode) { errEl.textContent = 'یکی از دکمه‌های «قیمت قبل از تخفیف» یا «قیمت بعد از تخفیف» را انتخاب کنید.'; return; }
+      if (discMode === 'after') {
+        const fin = sale * (1 - d / 100);
+        setText('dc-title', 'قیمت نهایی (پس از تخفیف)');
+        setText('dc-l2', 'قیمت قبل از تخفیف');
+        setMoney('dc-cost', fin);
+        setMoney('dc-amount', sale - fin);
+        setMoney('dc-sale', sale);
+      } else {
+        if (d >= 100) { errEl.textContent = 'برای این محاسبه، تخفیف باید کمتر از ۱۰۰٪ باشد.'; return; }
+        const orig = sale / (1 - d / 100);
+        setText('dc-title', 'قیمت خرید (بدون تخفیف)');
+        setText('dc-l2', 'قیمت پس از تخفیف');
+        setMoney('dc-cost', orig);
+        setMoney('dc-amount', orig - sale);
+        setMoney('dc-sale', sale);
+      }
       outDisc.hidden = false;
     } else {
       const sale = readField(saleEl, 'قیمت فروش'); if (sale === null) return;
@@ -434,6 +460,15 @@
   saleEl.addEventListener('input', () => { mode = 'sale'; groupInput(saleEl); calc(); });
   pctEl.addEventListener('input', () => { mode = 'pct'; calc(); });
   discEl.addEventListener('input', calc);
+  function setDiscMode(m) {
+    discMode = m;
+    const b = document.getElementById('dm-before'), a = document.getElementById('dm-after');
+    b.classList.toggle('on', m === 'before'); b.setAttribute('aria-pressed', m === 'before');
+    a.classList.toggle('on', m === 'after'); a.setAttribute('aria-pressed', m === 'after');
+    calc();
+  }
+  document.getElementById('dm-before').addEventListener('click', () => setDiscMode('before'));
+  document.getElementById('dm-after').addEventListener('click', () => setDiscMode('after'));
 
   // دکمه تم روشن/دارک
   const root = document.documentElement;
