@@ -118,9 +118,8 @@
     border-radius: 12px;
     background: var(--accent-soft);
     padding: 14px;
-    margin-bottom: 12px;
   }
-  .result:last-of-type { margin-bottom: 0; }
+  .result:not([hidden]) ~ .result:not([hidden]) { margin-top: 12px; }
   .result h2 { font-size: 15px; margin: 0 0 4px; color: var(--accent); }
   .price { font-size: 24px; font-weight: bold; direction: ltr; text-align: right; }
   .detail { font-size: 13px; color: var(--muted); margin-top: 4px; }
@@ -149,6 +148,10 @@
     </div>
     <div class="field">
       <label for="pct">سود (درصد)</label>
+      <div class="seg" role="group" aria-label="نوع سود">
+        <button type="button" id="pm-mk" aria-pressed="false">مارک‌آپ</button>
+        <button type="button" id="pm-mg" aria-pressed="false">مارجین</button>
+      </div>
       <input id="pct" type="text" inputmode="decimal" autocomplete="off">
     </div>
     <div class="field">
@@ -163,13 +166,13 @@
       </div>
       <input id="disc" type="text" inputmode="decimal" autocomplete="off">
     </div>
-    <div class="hint">قیمت خرید + درصد سود ← محاسبه قیمت فروش<br>قیمت خرید + قیمت فروش ← محاسبه سود<br>قیمت فروش + درصد سود ← محاسبه قیمت خرید<br>قیمت فروش + تخفیف + «قیمت قبل از تخفیف» ← محاسبه قیمت خرید بدون تخفیف<br>قیمت فروش + تخفیف + «قیمت بعد از تخفیف» ← محاسبه مبلغ تخفیف و قیمت نهایی<br>(با دکمه‌های بالای کادر تخفیف، یکی از این دو حالت را انتخاب کنید)<br>در حالت‌های دیگر، تخفیف (اختیاری) از قیمت فروش کم می‌شود.</div>
+    <div class="hint">قیمت خرید + درصد سود ← محاسبه قیمت فروش<br>قیمت خرید + قیمت فروش ← محاسبه سود<br>قیمت فروش + درصد سود ← محاسبه قیمت خرید<br>قیمت فروش + تخفیف + «قیمت قبل از تخفیف» ← محاسبه قیمت خرید بدون تخفیف<br>قیمت فروش + تخفیف + «قیمت بعد از تخفیف» ← محاسبه مبلغ تخفیف و قیمت نهایی<br>(با دکمه‌های بالای کادر تخفیف، یکی از این دو حالت را انتخاب کنید)<br>برای محاسبه با سود (درصد)، مارک‌آپ یا مارجین (یا هر دو) را با دکمه‌های زیر عنوان آن انتخاب کنید.<br>در حالت‌های دیگر، تخفیف (اختیاری) از قیمت فروش کم می‌شود.</div>
     <div class="err" id="err"></div>
   </div>
 
   <!-- حالت اول: از درصد سود، قیمت فروش -->
   <div class="card" id="out-price" hidden>
-    <div class="result">
+    <div class="result" id="res-mk">
       <h2>مارک‌آپ (سود روی قیمت خرید)</h2>
       <div class="price" id="mk-price"></div>
       <div class="detail">مبلغ سود: <b id="mk-profit"></b></div>
@@ -179,7 +182,7 @@
         <div class="detail">سود پس از تخفیف: <b id="mk-aprofit"></b></div>
       </div>
     </div>
-    <div class="result">
+    <div class="result" id="res-mg">
       <h2>مارجین (سود روی قیمت فروش)</h2>
       <div class="price" id="mg-price"></div>
       <div class="detail">مبلغ سود: <b id="mg-profit"></b></div>
@@ -204,12 +207,12 @@
   <!-- حالت سوم: از قیمت فروش و درصد سود، قیمت خرید -->
   <div class="card" id="out-cost" hidden>
     <div class="detail" id="ck-after" hidden style="margin:0 0 12px">قیمت فروش پس از تخفیف: <b id="ck-after-val"></b></div>
-    <div class="result">
+    <div class="result" id="rc-mk">
       <h2>قیمت خرید با مارک‌آپ</h2>
       <div class="price" id="ck-cost"></div>
       <div class="detail">مبلغ سود: <b id="ck-profit"></b></div>
     </div>
-    <div class="result">
+    <div class="result" id="rc-mg">
       <h2>قیمت خرید با مارجین</h2>
       <div class="price" id="cg-cost"></div>
       <div class="detail">مبلغ سود: <b id="cg-profit"></b></div>
@@ -292,6 +295,8 @@
   let mode = 'pct';
   // حالت «قیمت فروش + تخفیف»: before = محاسبه قیمت قبل از تخفیف، after = محاسبه قیمت بعد از تخفیف، null = انتخاب نشده
   let discMode = null;
+  // انتخاب‌های مارک‌آپ و مارجین (هر دو می‌توانند هم‌زمان فعال باشند)
+  let useMk = false, useMg = false;
   const outCost = document.getElementById('out-cost');
   const outDisc = document.getElementById('out-disc');
 
@@ -356,7 +361,7 @@
       setText('mg-profit', '—');
       setText('mg-real', '—');
       document.getElementById('mg-disc').hidden = true;
-      errEl.textContent = 'مارجین باید کمتر از ۱۰۰٪ باشد.';
+      if (useMg) errEl.textContent = 'مارجین باید کمتر از ۱۰۰٪ باشد.';
     } else {
       const mgPrice = cost / (1 - p);
       const mgProfit = mgPrice - cost;
@@ -366,6 +371,8 @@
       setText('mg-real', fmt(mgReal) + '٪');
       showDisc('mg', mgPrice, cost, d);
     }
+    document.getElementById('res-mk').hidden = !useMk;
+    document.getElementById('res-mg').hidden = !useMg;
     outPrice.hidden = false;
   }
 
@@ -385,12 +392,14 @@
     if (p >= 1) {
       setText('cg-cost', '—');
       setText('cg-profit', '—');
-      errEl.textContent = 'مارجین باید کمتر از ۱۰۰٪ باشد.';
+      if (useMg) errEl.textContent = 'مارجین باید کمتر از ۱۰۰٪ باشد.';
     } else {
       const c = sale * (1 - p);
       setMoney('cg-cost', c);
       setMoney('cg-profit', sale - c);
     }
+    document.getElementById('rc-mk').hidden = !useMk;
+    document.getElementById('rc-mg').hidden = !useMg;
     outCost.hidden = false;
   }
 
@@ -420,6 +429,10 @@
     else if (hasSale && hasPct) action = 'cost';
     else if (hasSale && hasDisc) action = 'disccost';
     if (!action) return;
+    if ((action === 'price' || action === 'cost') && !useMk && !useMg) {
+      errEl.textContent = 'یکی از دکمه‌های مارک‌آپ یا مارجین (یا هر دو) را انتخاب کنید.';
+      return;
+    }
 
     if (action === 'profit') {
       const cost = readField(costEl, 'قیمت خرید'); if (cost === null) return;
@@ -460,11 +473,22 @@
   saleEl.addEventListener('input', () => { mode = 'sale'; groupInput(saleEl); calc(); });
   pctEl.addEventListener('input', () => { mode = 'pct'; calc(); });
   discEl.addEventListener('input', calc);
+  function bindToggle(id, getSet) {
+    const el = document.getElementById(id);
+    el.addEventListener('click', () => {
+      const on = getSet();
+      el.classList.toggle('on', on);
+      el.setAttribute('aria-pressed', on);
+      calc();
+    });
+  }
+  bindToggle('pm-mk', () => (useMk = !useMk));
+  bindToggle('pm-mg', () => (useMg = !useMg));
   function setDiscMode(m) {
-    discMode = m;
+    discMode = discMode === m ? null : m;  // کلیک دوباره روی گزینه انتخاب‌شده، آن را برمی‌دارد
     const b = document.getElementById('dm-before'), a = document.getElementById('dm-after');
-    b.classList.toggle('on', m === 'before'); b.setAttribute('aria-pressed', m === 'before');
-    a.classList.toggle('on', m === 'after'); a.setAttribute('aria-pressed', m === 'after');
+    b.classList.toggle('on', discMode === 'before'); b.setAttribute('aria-pressed', discMode === 'before');
+    a.classList.toggle('on', discMode === 'after'); a.setAttribute('aria-pressed', discMode === 'after');
     calc();
   }
   document.getElementById('dm-before').addEventListener('click', () => setDiscMode('before'));
